@@ -1,21 +1,28 @@
-//
-//  CountdownOverlay.swift
-//  Pomm
-//
-//  Created by Igor Pascoal on 10/08/2025.
-//
 import SwiftUI
 
 struct CountdownOverlay: View {
     let number: Int
+    let namespace: Namespace.ID
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.6)
-            LargeNumberOverlay(value: number)
+        GeometryReader { geo in
+            VStack {
+                Spacer()
+
+                LargeNumberOverlay(value: number)
+                    .font(.system(size: 140, weight: .semibold, design: .rounded))
+                    .baselineOffset(-6)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: geo.size.height * 0.4)
+                    .multilineTextAlignment(.center)
+                    .matchedGeometryEffect(id: "countdownMorph", in: namespace)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: number)
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea()
-        .transition(.opacity)
     }
 }
-
