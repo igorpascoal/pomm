@@ -14,55 +14,60 @@ struct TimerSetupView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            GeometryReader { geo in
-                VStack {
-                    Spacer()
+            VStack {
+                Spacer()
 
-                    // Timer display optically centered
-                    TimeLabelView(minutes: minutes, seconds: 0)
-                        .font(.system(size: 140, weight: .semibold, design: .rounded))
-                        .minimumScaleFactor(0.5)
-                        .baselineOffset(-6)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: geo.size.height * 0.4) // ensures stable space
-                        .matchedGeometryEffect(id: "countdownMorph", in: namespace)
-                        .opacity(store.appState == .countingDown ? 0 : 1)
-                        .animation(.easeInOut(duration: 0.25), value: store.appState)
+                // Optically centered time; only SIZE participates in the morph
+                TimeLabelView(minutes: minutes, seconds: 0)
+                    .font(.system(size: 140, weight: .semibold, design: .rounded))
+                    .minimumScaleFactor(0.5)
+                    .baselineOffset(-6)
+                    .frame(maxWidth: .infinity)                  // center horizontally
+                    .frame(height: 200)                           // stable vertical block
+                    .matchedGeometryEffect(
+                        id: "countdownMorph",
+                        in: namespace,
+                        properties: .size,
+                        anchor: .center,
+                        isSource: store.appState != .countingDown
+                    )
+                    .opacity(store.appState == .countingDown ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.25), value: store.appState)
 
-                    Spacer()
+                Spacer()
 
-                    if store.appState != .countingDown {
-                        VStack(spacing: 18) {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    store.userTappedStart()
-                                }
-                            } label: {
-                                Text("Start")
-                                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                                    .frame(minWidth: 180)
-                                    .padding(.vertical, 16)
-                                    .background(.white)
-                                    .foregroundStyle(.black)
-                                    .clipShape(Capsule())
+                // Controls hidden during countdown
+                if store.appState != .countingDown {
+                    VStack(spacing: 18) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                store.userTappedStart()
                             }
-
-                            Button {
-                                showSettings = true
-                            } label: {
-                                Label("Settings", systemImage: "gearshape")
-                                    .font(.callout)
-                                    .foregroundStyle(.white.opacity(0.9))
-                            }
-                            .buttonStyle(.plain)
+                        } label: {
+                            Text("Start")
+                                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                                .frame(minWidth: 180)
+                                .padding(.vertical, 16)
+                                .background(.white)
+                                .foregroundStyle(.black)
+                                .clipShape(Capsule())
                         }
-                        .padding(.bottom, 40)
-                        .transition(.opacity)
-                        .animation(.easeInOut(duration: 0.2), value: store.appState)
+
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Label("Settings", systemImage: "gearshape")
+                                .font(.callout)
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.bottom, 40)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: store.appState)
                 }
-                .padding(.horizontal, 20)
             }
+            .padding(.horizontal, 20)
         }
         .contentShape(Rectangle())
         .gesture(dragGesture)
@@ -81,9 +86,7 @@ struct TimerSetupView: View {
         DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { value in
                 if store.appState == .countingDown {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        store.cancelCountdownAndReturnToIdle()
-                    }
+                    withAnimation(.easeInOut(duration: 0.25)) { store.cancelCountdownAndReturnToIdle() }
                 }
                 let delta = -(value.translation.height)
                 let effective = delta - dragAccumulator

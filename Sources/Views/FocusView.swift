@@ -18,22 +18,23 @@ struct FocusView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Background with color fill
+                // Background + fill
                 ZStack(alignment: .bottom) {
                     Color.black
                     color
                         .frame(height: geo.size.height * max(0, min(1, progress)))
                         .frame(maxWidth: .infinity, alignment: .bottom)
-                        .animation(.linear(duration: 0.0), value: progress)
+                        .animation(.easeInOut(duration: 0.12), value: progress) // smoother fill
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
+                    HapticsService.light() // subtle feedback when revealing Stop
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                         showStop = true
                     }
                 }
 
-                // Remaining time (centered)
+                // Centered remaining time (optional)
                 if showTimeWhileRunning {
                     VStack {
                         Spacer()
@@ -43,10 +44,9 @@ struct FocusView: View {
                         Spacer()
                     }
                     .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.2), value: showTimeWhileRunning)
                 }
 
-                // Stop button
+                // Stop button (tap outside to dismiss)
                 if showStop {
                     Color.clear
                         .contentShape(Rectangle())

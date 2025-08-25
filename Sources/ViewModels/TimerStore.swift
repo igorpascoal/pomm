@@ -3,25 +3,21 @@ import CoreData
 
 final class TimerStore: ObservableObject {
     // MARK: - Published UI state
-    @Published var appState: AppState = .idle                 // .ended unused; we return to .idle on finish
-    @Published var selectedIndex: Int = 1                     // default 25 min (index in steps)
-    @Published var countdownValue: Int = 3                    // 3→0 overlay
-    @Published var progress: CGFloat = 0.0                    // 0...1
+    @Published var appState: AppState = .idle
+    @Published var selectedIndex: Int = 1                     // default 25 min
+    @Published var countdownValue: Int = 3
+    @Published var progress: CGFloat = 0.0
     @Published var sessionColor: Color = .blue
-    @Published var remainingSeconds: Int = 0                  // for optional HUD
+    @Published var remainingSeconds: Int = 0
 
-    // Allowed minute steps (PRD)
     let steps: [Int] = [10, 25, 60, 90]
 
-    // MARK: - Private timers/state
     private var countdownTimer: Timer?
     private var displayTimer: Timer?
     private var startDate: Date?
     private var endDate: Date?
-
     private var durationSecondsCurrentRun: TimeInterval = 0
 
-    // Persistence (Core Data + restoration)
     private weak var context: NSManagedObjectContext?
     private let endDateKey = "pomm.activeEndDate"
     private let colorHueKey = "pomm.activeColorHue"
@@ -29,15 +25,12 @@ final class TimerStore: ObservableObject {
     private let selectedIndexKey = "pomm.activeSelectedIndex"
     private var lastHueSaved: Double = 0.55
 
-    // Default animation used for state changes
     private let transitionAnim = Animation.easeInOut(duration: 0.25)
 
-    // MARK: - Setup
-    func attach(context: NSManagedObjectContext) {
-        self.context = context
-    }
+    // Setup
+    func attach(context: NSManagedObjectContext) { self.context = context }
 
-    // MARK: - Selection logic (drag increments)
+    // Selection
     func adjustIndex(by deltaSteps: Int) {
         guard deltaSteps != 0 else { return }
         let newIndex = max(0, min(steps.count - 1, selectedIndex + deltaSteps))
@@ -47,33 +40,29 @@ final class TimerStore: ObservableObject {
         }
     }
 
-    // MARK: - Start button flow
+    // Start button
     func userTappedStart() {
-        guard appState == .idle else { return }
-        guard steps.indices.contains(selectedIndex) else { return }
+        guard appState == .idle, steps.indices.contains(selectedIndex) else { return }
+        HapticsService.medium() // feedback on starting
         startCountdown()
     }
 
-    // Cancel countdown on any interaction
+    // Cancel countdown
     func cancelCountdownAndReturnToIdle() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
+        countdownTimer?.invalidate(); countdownTimer = nil
         countdownValue = 3
         if appState == .countingDown {
-            withAnimation(transitionAnim) {
-                appState = .idle
-            }
+            HapticsService.rigid() // small “cancel” haptic
+            withAnimation(transitionAnim) { appState = .idle }
         }
     }
 
-    // MARK: - Countdown
+    // Countdown
     private func startCountdown() {
         NotificationService.requestAuthorizationIfNeeded()
         countdownValue = 3
         countdownTimer?.invalidate()
-        withAnimation(transitionAnim) {
-            appState = .countingDown
-        }
+        withAnimation(transitionAnim) { appState = .countingDown }
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] t in
             guard let self else { return }
             if self.countdownValue > 0 { self.countdownValue -= 1 }
@@ -85,7 +74,7 @@ final class TimerStore: ObservableObject {
         RunLoop.main.add(countdownTimer!, forMode: .common)
     }
 
-    // MARK: - Running
+    // Running
     private func beginRun() {
         let minutes = steps[selectedIndex]
         durationSecondsCurrentRun = TimeInterval(minutes * 60)
@@ -94,26 +83,22 @@ final class TimerStore: ObservableObject {
         startDate = now
         endDate = now.addingTimeInterval(durationSecondsCurrentRun)
 
-        // Pleasant random color (fixed S/B)
         let hue = Double.random(in: 0...1)
         lastHueSaved = hue
         sessionColor = Color(hue: hue, saturation: 0.65, brightness: 0.85)
 
-        // Persist for restoration
         UserDefaults.standard.set(endDate, forKey: endDateKey)
         UserDefaults.standard.set(hue, forKey: colorHueKey)
         UserDefaults.standard.set(durationSecondsCurrentRun, forKey: durationKey)
         UserDefaults.standard.set(selectedIndex, forKey: selectedIndexKey)
 
-        // Schedule end notification
         if let endDate { NotificationService.scheduleTimerEndNotification(at: endDate) }
 
         remainingSeconds = Int(durationSecondsCurrentRun)
         progress = 0.0
 
-        withAnimation(transitionAnim) {
-            appState = .running
-        }
+        HapticsService.success() // “go” haptic
+        withAnimation(transitionAnim) { appState = .running }
         startDisplayTimer()
     }
 
@@ -137,12 +122,10 @@ final class TimerStore: ObservableObject {
         let remaining = max(0, Int(ceil(end.timeIntervalSince(now))))
         if remainingSeconds != remaining { remainingSeconds = remaining }
 
-        if now >= end {
-            completeRunAndReturnToSetup()
-        }
+        if now >= end { completeRunAndReturnToSetup() }
     }
 
-    // Stop via overlay Stop button (cancel w/o saving)
+    // Stop via Stop button (cancel, no save)
     func cancelRunAndReturnToSetup() {
         displayTimer?.invalidate(); displayTimer = nil
         countdownTimer?.invalidate(); countdownTimer = nil
@@ -150,23 +133,20 @@ final class TimerStore: ObservableObject {
         NotificationService.cancelPending()
         clearActivePersistence()
 
-        // Reset temporal fields but KEEP selectedIndex (user’s last choice)
         progress = 0
         startDate = nil
         endDate = nil
         remainingSeconds = 0
 
-        withAnimation(transitionAnim) {
-            appState = .idle
-        }
+        HapticsService.warning() // stop haptic
+        withAnimation(transitionAnim) { appState = .idle }
     }
 
-    // Finish naturally: save + return to setup
+    // Finish naturally (save)
     private func completeRunAndReturnToSetup() {
         displayTimer?.invalidate(); displayTimer = nil
         progress = 1.0
 
-        // Save completed session
         if let ctx = context, let start = startDate {
             let minutes = Int(round(durationSecondsCurrentRun / 60.0))
             PersistenceService.saveSession(
@@ -181,15 +161,13 @@ final class TimerStore: ObservableObject {
         NotificationService.cancelPending()
         clearActivePersistence()
 
-        // Reset temporal fields but KEEP selectedIndex (so the chosen duration remains)
         startDate = nil
         endDate = nil
         remainingSeconds = 0
         progress = 0
 
-        withAnimation(transitionAnim) {
-            appState = .idle
-        }
+        HapticsService.success() // completion haptic
+        withAnimation(transitionAnim) { appState = .idle }
     }
 
     private func clearActivePersistence() {
@@ -200,7 +178,7 @@ final class TimerStore: ObservableObject {
         d.removeObject(forKey: selectedIndexKey)
     }
 
-    // MARK: - Restoration (if app is killed unexpectedly)
+    // Restoration
     func restoreIfNeeded() {
         guard appState == .idle else { return }
         let d = UserDefaults.standard
@@ -220,14 +198,12 @@ final class TimerStore: ObservableObject {
         endDate = savedEnd
         durationSecondsCurrentRun = savedDuration
 
-        withAnimation(transitionAnim) {
-            appState = .running
-        }
+        withAnimation(transitionAnim) { appState = .running }
         startDisplayTimer()
         tick()
     }
 
-    // MARK: - Termination handling (cancel on swipe-kill)
+    // Termination handling
     func handleAppWillTerminate() {
         NotificationService.cancelPending()
         clearActivePersistence()
