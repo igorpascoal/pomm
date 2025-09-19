@@ -1,9 +1,3 @@
-//
-//  RootView.swift
-//  Pomm
-//
-//  Created by Igor Pascoal on 10/08/2025.
-//
 import SwiftUI
 import UIKit
 import CoreData
@@ -11,31 +5,35 @@ import CoreData
 struct RootView: View {
     @EnvironmentObject private var store: TimerStore
     @Environment(\.managedObjectContext) private var moc
+    @Namespace private var countdownNS
 
     var body: some View {
-        Group {
-            switch store.appState {
-            case .idle, .countingDown:
-                // Only the setup screen lives in a NavigationStack (for the top-left gear).
-                NavigationStack {
-                    ZStack {
-                        TimerSetupView()
-                        if store.appState == .countingDown {
-                            CountdownOverlay(number: store.countdownValue)
-                        }
-                    }
-                }
-                .tint(.white) // white gear on black bg
+        ZStack {
+            // Idle / Setup
+            if store.appState == .idle || store.appState == .ended {
+                TimerSetupView(namespace: countdownNS)
+                    .transition(.opacity) // calm fade
+            }
 
-            case .running:
+            // Countdown over setup
+            if store.appState == .countingDown {
+                // Keep setup underneath; overlay centered countdown
+                TimerSetupView(namespace: countdownNS)
+                CountdownOverlay(number: store.countdownValue, namespace: countdownNS)
+                    .transition(.opacity) // calm fade
+            }
+
+            // Running
+            if store.appState == .running {
                 FocusView(progress: store.progress, color: store.sessionColor)
-
-            case .ended:
-                EndView()
+                    .transition(.opacity) // calm fade
             }
         }
-        .ignoresSafeArea()                // full-bleed black background
-        .statusBar(hidden: true)          // 1) never show status bar
+        .ignoresSafeArea()
+        .statusBar(hidden: true)
+        // IMPORTANT: avoid implicit animations on global state changes.
+        // We'll use explicit withAnimation calls inside the store / actions instead.
+        .animation(nil, value: store.appState)
         .onAppear {
             store.attach(context: moc)
             store.restoreIfNeeded()

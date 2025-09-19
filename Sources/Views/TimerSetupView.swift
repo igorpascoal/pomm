@@ -1,18 +1,10 @@
-//
-//  TimerSetupView.swift
-//  Pomm
-//
-//  Created by Igor Pascoal on 10/08/2025.
-//
 import SwiftUI
 
 struct TimerSetupView: View {
     @EnvironmentObject private var store: TimerStore
+    let namespace: Namespace.ID
 
-    // How many screen points the user must move to change 1 step.
-    private let pixelsPerStep: CGFloat = 28
-
-    // Internal accumulator so partial drags carry over during a gesture.
+    private let pixelsPerStep: CGFloat = 36
     @State private var dragAccumulator: CGFloat = 0
     @State private var showSettings = false
 
@@ -22,76 +14,88 @@ struct TimerSetupView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // 3) Center the main MM:SS UI
-            VStack(spacing: 12) {
-                Spacer(minLength: 0)
+            VStack {
+                Spacer()
 
+                // Optically centered time; only SIZE participates in the morph
                 TimeLabelView(minutes: minutes, seconds: 0)
-                    .padding(.bottom, 4)
+                    .font(.system(size: 140, weight: .semibold, design: .rounded))
+                    .minimumScaleFactor(0.5)
+                    .baselineOffset(-6)
+                    .frame(maxWidth: .infinity)                  // center horizontally
+                    .frame(height: 200)                           // stable vertical block
+                    .matchedGeometryEffect(
+                        id: "countdownMorph",
+                        in: namespace,
+                        properties: .size,
+                        anchor: .center,
+                        isSource: store.appState != .countingDown
+                    )
+                    .opacity(store.appState == .countingDown ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.25), value: store.appState)
 
-                Text("Slide up/down to set time")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Spacer()
 
-                //#if DEBUG
-                // Dev-only helpers to preview states
-                //HStack(spacing: 12) {
-                  //  Button("Preview Countdown") { store.goToCountdown() }
-                  //  Button("Preview Run") { store.goToRunning() }
-                  //  Button("Preview End") { store.goToEnded() }
-                //}
-                //.font(.footnote)
-                //.tint(.white.opacity(0.9))
-                //#endif
+                // Controls hidden during countdown
+                if store.appState != .countingDown {
+                    VStack(spacing: 18) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                store.userTappedStart()
+                            }
+                        } label: {
+                            Text("Start")
+                                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                                .frame(minWidth: 180)
+                                .padding(.vertical, 16)
+                                .background(.white)
+                                .foregroundStyle(.black)
+                                .clipShape(Capsule())
+                        }
 
-                Spacer(minLength: 0)
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Label("Settings", systemImage: "gearshape")
+                                .font(.callout)
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.bottom, 40)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: store.appState)
+                }
             }
-            .foregroundStyle(.white)
             .padding(.horizontal, 20)
         }
+        .contentShape(Rectangle())
         .gesture(dragGesture)
-        .onAppear { dragAccumulator = 0 }
-        // 2) Gear in the left of the top nav bar (only on setup screen)
-        .navigationTitle("") // no visible title
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .semibold))
+        .onTapGesture {
+            if store.appState == .countingDown {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    store.cancelCountdownAndReturnToIdle()
                 }
             }
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
+        .onAppear { dragAccumulator = 0 }
+        .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { value in
                 if store.appState == .countingDown {
-                    store.cancelCountdownAndReturnToIdle()
-                } else {
-                    store.cancelPendingStart()
+                    withAnimation(.easeInOut(duration: 0.25)) { store.cancelCountdownAndReturnToIdle() }
                 }
-
-                let delta = -(value.translation.height) // up increases
+                let delta = -(value.translation.height)
                 let effective = delta - dragAccumulator
                 let stepsDelta = Int(effective / pixelsPerStep)
-
                 if stepsDelta != 0 {
                     store.adjustIndex(by: stepsDelta)
                     dragAccumulator += CGFloat(stepsDelta) * pixelsPerStep
                 }
             }
-            .onEnded { _ in
-                dragAccumulator = 0
-                store.scheduleCountdownAfterInactivity()
-            }
+            .onEnded { _ in dragAccumulator = 0 }
     }
 }
-
-

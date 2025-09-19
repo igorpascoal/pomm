@@ -1,54 +1,36 @@
-//
-//  TimerStore.swift
-//  Pomm
-//
-//  Created by Igor Pascoal on 10/08/2025.
-//
 import SwiftUI
 import CoreData
 
 final class TimerStore: ObservableObject {
     // MARK: - Published UI state
     @Published var appState: AppState = .idle
-    @Published var selectedIndex: Int = 0
+    @Published var selectedIndex: Int = 1                     // default 25 min
     @Published var countdownValue: Int = 3
     @Published var progress: CGFloat = 0.0
     @Published var sessionColor: Color = .blue
-    @Published var remainingSeconds: Int = 0               // for HUD
+    @Published var remainingSeconds: Int = 0
 
-    // Allowed minute steps
-    let steps: [Int] = [0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90]
+    let steps: [Int] = [10, 25, 60, 90]
 
-    // MARK: - Private timers/state
-    private var inactivityWorkItem: DispatchWorkItem?
     private var countdownTimer: Timer?
     private var displayTimer: Timer?
-
     private var startDate: Date?
     private var endDate: Date?
-    private var durationSeconds: TimeInterval {
-        TimeInterval(steps[selectedIndex] * 60)
-    }
+    private var durationSecondsCurrentRun: TimeInterval = 0
 
-    // Persistence
     private weak var context: NSManagedObjectContext?
     private let endDateKey = "pomm.activeEndDate"
     private let colorHueKey = "pomm.activeColorHue"
     private let durationKey = "pomm.activeDurationSeconds"
     private let selectedIndexKey = "pomm.activeSelectedIndex"
-    private var lastHueSaved: Double = 0.55                 // cached for save
+    private var lastHueSaved: Double = 0.55
 
-    // MARK: - Setup
-    func attach(context: NSManagedObjectContext) {
-        self.context = context
-    }
+    private let transitionAnim = Animation.easeInOut(duration: 0.25)
 
-    // MARK: - Public helpers (debug)
-    func goToCountdown() { appState = .countingDown }
-    func goToRunning()   { appState = .running }
-    func goToEnded()     { appState = .ended }
+    // Setup
+    func attach(context: NSManagedObjectContext) { self.context = context }
 
-    // MARK: - Selection logic
+    // Selection
     func adjustIndex(by deltaSteps: Int) {
         guard deltaSteps != 0 else { return }
         let newIndex = max(0, min(steps.count - 1, selectedIndex + deltaSteps))
@@ -58,26 +40,29 @@ final class TimerStore: ObservableObject {
         }
     }
 
-    // MARK: - Idle → countdown scheduling
-    func scheduleCountdownAfterInactivity() {
-        cancelPendingStart()
-        guard steps[selectedIndex] > 0 else { return }
-        let work = DispatchWorkItem { [weak self] in self?.startCountdown() }
-        inactivityWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+    // Start button
+    func userTappedStart() {
+        guard appState == .idle, steps.indices.contains(selectedIndex) else { return }
+        HapticsService.medium() // feedback on starting
+        startCountdown()
     }
 
-    func cancelPendingStart() {
-        inactivityWorkItem?.cancel()
-        inactivityWorkItem = nil
+    // Cancel countdown
+    func cancelCountdownAndReturnToIdle() {
+        countdownTimer?.invalidate(); countdownTimer = nil
+        countdownValue = 3
+        if appState == .countingDown {
+            HapticsService.rigid() // small “cancel” haptic
+            withAnimation(transitionAnim) { appState = .idle }
+        }
     }
 
-    // MARK: - Countdown
+    // Countdown
     private func startCountdown() {
         NotificationService.requestAuthorizationIfNeeded()
         countdownValue = 3
-        appState = .countingDown
         countdownTimer?.invalidate()
+        withAnimation(transitionAnim) { appState = .countingDown }
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] t in
             guard let self else { return }
             if self.countdownValue > 0 { self.countdownValue -= 1 }
@@ -89,40 +74,32 @@ final class TimerStore: ObservableObject {
         RunLoop.main.add(countdownTimer!, forMode: .common)
     }
 
-    func cancelCountdownAndReturnToIdle() {
-        cancelPendingStart()
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-        countdownValue = 3
-        if appState != .running { appState = .idle }
-    }
-
-    // MARK: - Start running
+    // Running
     private func beginRun() {
+        let minutes = steps[selectedIndex]
+        durationSecondsCurrentRun = TimeInterval(minutes * 60)
+
         let now = Date()
         startDate = now
-        endDate = now.addingTimeInterval(durationSeconds)
+        endDate = now.addingTimeInterval(durationSecondsCurrentRun)
 
-        // Pleasant color (random hue, fixed S/B)
         let hue = Double.random(in: 0...1)
         lastHueSaved = hue
         sessionColor = Color(hue: hue, saturation: 0.65, brightness: 0.85)
 
-        // Persist for restoration
         UserDefaults.standard.set(endDate, forKey: endDateKey)
         UserDefaults.standard.set(hue, forKey: colorHueKey)
-        UserDefaults.standard.set(durationSeconds, forKey: durationKey)
+        UserDefaults.standard.set(durationSecondsCurrentRun, forKey: durationKey)
         UserDefaults.standard.set(selectedIndex, forKey: selectedIndexKey)
 
-        // Schedule end notification
         if let endDate { NotificationService.scheduleTimerEndNotification(at: endDate) }
 
-        // Start UI ticking
-        remainingSeconds = Int(durationSeconds)
-        startDisplayTimer()
-
+        remainingSeconds = Int(durationSecondsCurrentRun)
         progress = 0.0
-        appState = .running
+
+        HapticsService.success() // “go” haptic
+        withAnimation(transitionAnim) { appState = .running }
+        startDisplayTimer()
     }
 
     private func startDisplayTimer() {
@@ -145,18 +122,33 @@ final class TimerStore: ObservableObject {
         let remaining = max(0, Int(ceil(end.timeIntervalSince(now))))
         if remainingSeconds != remaining { remainingSeconds = remaining }
 
-        if now >= end { finishRun() }
+        if now >= end { completeRunAndReturnToSetup() }
     }
 
-    private func finishRun() {
-        displayTimer?.invalidate()
-        displayTimer = nil
-        progress = 1.0
-        appState = .ended
+    // Stop via Stop button (cancel, no save)
+    func cancelRunAndReturnToSetup() {
+        displayTimer?.invalidate(); displayTimer = nil
+        countdownTimer?.invalidate(); countdownTimer = nil
 
-        // Save the session (best-effort)
+        NotificationService.cancelPending()
+        clearActivePersistence()
+
+        progress = 0
+        startDate = nil
+        endDate = nil
+        remainingSeconds = 0
+
+        HapticsService.warning() // stop haptic
+        withAnimation(transitionAnim) { appState = .idle }
+    }
+
+    // Finish naturally (save)
+    private func completeRunAndReturnToSetup() {
+        displayTimer?.invalidate(); displayTimer = nil
+        progress = 1.0
+
         if let ctx = context, let start = startDate {
-            let minutes = Int(round((durationSeconds) / 60.0))
+            let minutes = Int(round(durationSecondsCurrentRun / 60.0))
             PersistenceService.saveSession(
                 startDate: start,
                 durationMinutes: minutes,
@@ -166,27 +158,16 @@ final class TimerStore: ObservableObject {
             )
         }
 
-        clearActivePersistence()
-        // Notification sound handled by system + delegate; no extra sound needed.
-    }
-
-    // MARK: - Reset
-    func reset() {
-        cancelPendingStart()
-        countdownTimer?.invalidate(); countdownTimer = nil
-        displayTimer?.invalidate(); displayTimer = nil
-
         NotificationService.cancelPending()
         clearActivePersistence()
 
-        appState = .idle
-        selectedIndex = 0
-        countdownValue = 3
-        progress = 0
-        sessionColor = .blue
         startDate = nil
         endDate = nil
         remainingSeconds = 0
+        progress = 0
+
+        HapticsService.success() // completion haptic
+        withAnimation(transitionAnim) { appState = .idle }
     }
 
     private func clearActivePersistence() {
@@ -197,7 +178,7 @@ final class TimerStore: ObservableObject {
         d.removeObject(forKey: selectedIndexKey)
     }
 
-    // MARK: - Restoration
+    // Restoration
     func restoreIfNeeded() {
         guard appState == .idle else { return }
         let d = UserDefaults.standard
@@ -215,15 +196,16 @@ final class TimerStore: ObservableObject {
         selectedIndex = max(0, min(steps.count - 1, savedIndex))
         startDate = savedEnd.addingTimeInterval(-savedDuration)
         endDate = savedEnd
-        appState = .running
+        durationSecondsCurrentRun = savedDuration
+
+        withAnimation(transitionAnim) { appState = .running }
         startDisplayTimer()
         tick()
     }
 
-    // MARK: - Termination handling
+    // Termination handling
     func handleAppWillTerminate() {
         NotificationService.cancelPending()
         clearActivePersistence()
     }
 }
-

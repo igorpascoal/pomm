@@ -13,7 +13,6 @@
 		3E1C3F7C2E490A0E0098DC0A /* TimerSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F7B2E490A060098DC0A /* TimerSetupView.swift */; };
 		3E1C3F7E2E490A310098DC0A /* CountdownOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F7D2E490A250098DC0A /* CountdownOverlay.swift */; };
 		3E1C3F802E490A600098DC0A /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F7F2E490A580098DC0A /* FocusView.swift */; };
-		3E1C3F822E490A850098DC0A /* EndView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F812E490A810098DC0A /* EndView.swift */; };
 		3E1C3F852E490ABB0098DC0A /* TimeLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F842E490AB00098DC0A /* TimeLabelView.swift */; };
 		3E1C3F872E490ADD0098DC0A /* LargeNumberOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F862E490AD50098DC0A /* LargeNumberOverlay.swift */; };
 		3E1C3F892E490B020098DC0A /* HapticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1C3F882E490AF90098DC0A /* HapticsService.swift */; };
@@ -50,7 +49,6 @@
 		3E1C3F7B2E490A060098DC0A /* TimerSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerSetupView.swift; sourceTree = "<group>"; };
 		3E1C3F7D2E490A250098DC0A /* CountdownOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountdownOverlay.swift; sourceTree = "<group>"; };
 		3E1C3F7F2E490A580098DC0A /* FocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusView.swift; sourceTree = "<group>"; };
-		3E1C3F812E490A810098DC0A /* EndView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndView.swift; sourceTree = "<group>"; };
 		3E1C3F842E490AB00098DC0A /* TimeLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeLabelView.swift; sourceTree = "<group>"; };
 		3E1C3F862E490AD50098DC0A /* LargeNumberOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeNumberOverlay.swift; sourceTree = "<group>"; };
 		3E1C3F882E490AF90098DC0A /* HapticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsService.swift; sourceTree = "<group>"; };
@@ -141,7 +139,6 @@
 			children = (
 				3E1C3F902E4918BE0098DC0A /* SettingsView.swift */,
 				3E1C3F832E490AA90098DC0A /* Components */,
-				3E1C3F812E490A810098DC0A /* EndView.swift */,
 				3E1C3F7F2E490A580098DC0A /* FocusView.swift */,
 				3E1C3F7D2E490A250098DC0A /* CountdownOverlay.swift */,
 				3E1C3F7B2E490A060098DC0A /* TimerSetupView.swift */,
@@ -337,7 +334,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3E1C3F822E490A850098DC0A /* EndView.swift in Sources */,
 				3E1C3F7C2E490A0E0098DC0A /* TimerSetupView.swift in Sources */,
 				3E1C3F802E490A600098DC0A /* FocusView.swift in Sources */,
 				3E1C3F892E490B020098DC0A /* HapticsService.swift in Sources */,
@@ -542,9 +538,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = VTQTPTUTJL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pomm;
