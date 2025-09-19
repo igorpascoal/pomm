@@ -7,36 +7,79 @@ struct RootView: View {
     @Environment(\.managedObjectContext) private var moc
     @Namespace private var countdownNS
 
+    // Controls the fade-in of the setup view from black
+    @State private var showSetupFade: Bool = false
+    // Forces a fresh onAppear for Setup view whenever we re-enter idle
+    @State private var idleToken = UUID()
+
     var body: some View {
         ZStack {
-            // Idle / Setup
+            // Solid black backplate—prevents any flash
+            Color.black.ignoresSafeArea()
+
+            // IDLE / SETUP: We render it with manual opacity control so it fades in from black
             if store.appState == .idle || store.appState == .ended {
                 TimerSetupView(namespace: countdownNS)
-                    .transition(.opacity) // calm fade
+                    .id(idleToken)                 // re-trigger onAppear per idle entry
+                    .opacity(showSetupFade ? 1 : 0)
+                    .onAppear {
+                        // Start from black, then fade Setup in
+                        showSetupFade = false
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            showSetupFade = true
+                        }
+                    }
             }
 
-            // Countdown over setup
+            // COUNTDOWN overlays the setup; calm fade (no slide/scale)
             if store.appState == .countingDown {
-                // Keep setup underneath; overlay centered countdown
                 TimerSetupView(namespace: countdownNS)
                 CountdownOverlay(number: store.countdownValue, namespace: countdownNS)
-                    .transition(.opacity) // calm fade
+                    .transition(.opacity)
             }
 
-            // Running
+            // FOCUS running—calm fade
             if store.appState == .running {
                 FocusView(progress: store.progress, color: store.sessionColor)
-                    .transition(.opacity) // calm fade
+                    .transition(.opacity)
+            }
+
+            // BREAK running—calm fade; break drains color top→bottom
+            if store.appState == .breakRunning {
+                BreakView(progress: store.progress, color: store.sessionColor)
+                    .transition(.opacity)
             }
         }
-        .ignoresSafeArea()
         .statusBar(hidden: true)
-        // IMPORTANT: avoid implicit animations on global state changes.
-        // We'll use explicit withAnimation calls inside the store / actions instead.
+        // Avoid implicit container animations; we drive what we need explicitly
         .animation(nil, value: store.appState)
         .onAppear {
             store.attach(context: moc)
             store.restoreIfNeeded()
+
+            // App launch: if we are in idle after restore, run the fade-in
+            if store.appState == .idle || store.appState == .ended {
+                idleToken = UUID()
+                showSetupFade = false
+                // Slight delay avoids racing first layout
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        showSetupFade = true
+                    }
+                }
+            }
+        }
+        // Whenever we *enter* idle (e.g., after break ends), re-run the fade
+        .onChange(of: store.appState) { newValue in
+            if newValue == .idle || newValue == .ended {
+                idleToken = UUID()      // force SetupView .onAppear again
+                showSetupFade = false
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        showSetupFade = true
+                    }
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
             store.handleAppWillTerminate()
