@@ -17,13 +17,13 @@ struct TimerSetupView: View {
             VStack {
                 Spacer()
 
-                // Optically centered time; only SIZE participates in the morph
+                // Time label (optically centered)
                 TimeLabelView(minutes: minutes, seconds: 0)
                     .font(.system(size: 140, weight: .semibold, design: .rounded))
                     .minimumScaleFactor(0.5)
                     .baselineOffset(-6)
-                    .frame(maxWidth: .infinity)                  // center horizontally
-                    .frame(height: 200)                           // stable vertical block
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
                     .matchedGeometryEffect(
                         id: "countdownMorph",
                         in: namespace,
@@ -36,7 +36,6 @@ struct TimerSetupView: View {
 
                 Spacer()
 
-                // Controls hidden during countdown
                 if store.appState != .countingDown {
                     VStack(spacing: 18) {
                         Button {
@@ -79,14 +78,18 @@ struct TimerSetupView: View {
             }
         }
         .onAppear { dragAccumulator = 0 }
-        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showSettings) { SettingsView()
+                .preferredColorScheme(.dark)    // force dark just for Settings
+        }
     }
 
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { value in
                 if store.appState == .countingDown {
-                    withAnimation(.easeInOut(duration: 0.25)) { store.cancelCountdownAndReturnToIdle() }
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        store.cancelCountdownAndReturnToIdle()
+                    }
                 }
                 let delta = -(value.translation.height)
                 let effective = delta - dragAccumulator

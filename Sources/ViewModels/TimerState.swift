@@ -10,6 +10,6 @@ enum AppState {
     case idle
     case countingDown
     case running
-    case ended
+    case breakRunning
+    case ended // not used in current flow but kept for completeness
 }
-
